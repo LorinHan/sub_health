@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>亚健康状态中医辨识系统</title>
+    <style>
+      [v-cloak] {
+        display: none;
+      }
+    </style>
+    <link rel="stylesheet" href="./static/elementui/index.css">
+    <link rel="stylesheet" href="./static/index.css">
+  </head>
+  <body onload="load()">
+    <div id="app">
+            <el-container style="height: 1200px;">
+                <el-header height="60px" style="text-align: left;" class="header">
+                    <img src="static/imgs/logo.jpg" alt="">
+                    <h1>亚健康状态中医在线问诊</h1>
+                </el-header>
+
+                <el-carousel :interval="4000" type="card" height="280px">
+                    <el-carousel-item v-for="item in lb_img" :key="item">
+                        <img :src=" 'static/imgs/' + item " alt="">
+                    </el-carousel-item>
+                </el-carousel>
+                
+                <el-divider></el-divider>
+
+                <el-container class="main">
+                        <p v-for="item in text" v-loading="loading" v-cloak>{{item}}</p>
+                        <div class="audioBox">
+                            <!-- 存储语音的盒子 -->
+                        </div>
+                </el-container>
+                
+                <el-button @click="location.reload();" class="clearBtn" type="warning" plain>清空窗口</el-button>
+                
+                <div class="mikBox" @click="start">
+                        <img class="mik" :src="mik_img_url" alt="">
+                </div>
+
+                <div class="state">
+                    <el-tabs v-model="activeName" @tab-click="handleClick">
+                        <el-tab-pane v-for="item in state" :label="item[1]" :name="item[0]">{{item[2]}}</el-tab-pane>
+                    </el-tabs>
+                </div>
+
+                <el-footer height="25px">
+                    <span>帮助</span>
+                    <span>使用反馈</span>
+                    <span>联系我们</span>
+                </el-footer>
+            </el-container>
+    
+    </div>
+    <script src="static/vue.min.js"></script>
+    <script src="static/elementui/index.js"></script>
+
+    
+    <script type="text/javascript" src="static/HZRecorder.js"></script>
+    <!-- node-baiduai-sdk-config -->
+    <script>
+        const request = require("request");
+        function load() {
+            document.getElementsByTagName("body")[0].style.display = "block";
+        }
+        var AipSpeechClient = require("baidu-aip-sdk").speech;
+        // 设置APPID/AK/SK
+        var APP_ID = "16699972";
+        var API_KEY = "2loY4dcxtgEiCoxfjccaC4u1";
+        var SECRET_KEY = "ZcIluL8UBgOnsZTBfU3s6AFctXCk9VhL";
+
+        // 新建一个对象，建议只保存一个对象调用服务接口
+        var client = new AipSpeechClient(APP_ID, API_KEY, SECRET_KEY);
+    </script>
+
+  <script>
+
+    new Vue({
+      el: "#app",
+      data() {
+        return {
+            text: [],
+            // loading用于判断当前是否处于录音状态
+            loading: 0,
+            // 录音按钮的图片
+            mik_img_url: "static/imgs/mik.png",
+            // 轮播图的图片
+            lb_img: [
+                'lb1.jpg',
+                'lb2.jpg',
+                'lb3.jpg',
+                'lb1.jpg',
+                'lb2.jpg',
+                'lb3.jpg'
+            ],
+            activeName: 'second',
+            state: {
+                first: ["first", "气虚", "气虚"],
+                second: ["second", "血虚", "血虚，指血液亏虚，不能濡养脏腑、经络、组织，表现为面、脸、唇、舌色淡白，脉细的一组状态。"],
+                third: ["third", "津液不足", "津液不足"],
+                fourth: ["fourth", "气滞", "气滞"],
+                fifth: ["fifth", "血瘀", "血瘀"],
+                sixth: ["sixth", "痰湿", "痰湿"],
+                eighth: ["eighth", "风寒", "风寒"],
+                nighth: ["nighth", "肝火", "肝火"],
+                tenth: ["tenth", "虚热", "虚热"],
+            }
+        }
+      },
+      methods: {
+            startRecording() {
+                if(this.loading == 1) return;
+                this.loading = 1;
+                this.mik_img_url = "static/imgs/loading.gif";
+                HZRecorder.get(function (rec) {
+                    recorder = rec;
+                    recorder.start();
+                });
+            },
+            speakAndAppend(text) {
+                var p = document.createElement('p');
+                p.innerHTML = "<img src='./static/imgs/logo.jpg' alt=''>" + text
+                document.getElementsByClassName("audioBox")[0].appendChild(p);
+                var speechSU = new window.SpeechSynthesisUtterance();
+                speechSU.text = text;
+                window.speechSynthesis.speak(speechSU);
+            },
+            stopRecording() {
+                if(this.loading == 0) return;
+                const loader = this.$loading({
+                    lock: true,
+                    text: 'Loading',
+                    background: 'rgba(0, 0, 0, 0.5)'
+                });
+                this.loading = 0;
+                this.mik_img_url = "static/imgs/mik.png";
+                var file = recorder.stop();
+                // 发送百度AI语音识别请求：
+                client.recognize(file, 'wav', 16000, {dev_pid: '1536'}).then(result => {
+                    if(result.err_no == 0) {
+                        this.getByHttp(result.result[0])
+                    } else {
+                        this.speakAndAppend("对不起，没有听清楚，请您再说一次")
+                    }
+                    loader.close();
+                }, err => {
+                    this.speakAndAppend("网络请求失败，请检查网络状态。")
+                    console.log(err);
+                    loader.close();
+                });
+    //             var audio = document.createElement('audio');
+    //             audio.controls = true;
+    //             recorder.play(audio);
+    //             audio.onclick = audio.play;
+    //             document.getElementsByClassName("audioBox")[0].appendChild(audio);
+            },
+            start() {
+                if(window.speechSynthesis.speaking == true) {window.speechSynthesis.cancel()}
+                if(this.loading == 0) this.startRecording();
+                else this.stopRecording();
+            },
+            handleClick(tab, event) {
+                if(window.speechSynthesis.speaking == true) {window.speechSynthesis.cancel()}
+                var speechSU = new window.SpeechSynthesisUtterance();
+                speechSU.text = this.state[tab.name][2];
+                window.speechSynthesis.speak(speechSU);
+            },
+            getByHttp(text) {
+                // 对中文进行url转码，否则request无法成功发起请求
+                text = encodeURI(text)
+                request("http://127.0.0.1:5000/query?input=" + text, (error, response, data) => {
+                    if(error) {
+                        console.log(error)
+                    } else {
+                        data = JSON.parse(data)
+                        console.log("anwser" + data.answer);
+                        console.log("note" + data.note);
+                        this.speakAndAppend(data.answer + ',' + data.note)
+                    }
+                });
+            },
+      },
+      created() {
+          document.onkeydown = e => {
+              if(e.which == 13) this.start();
+          }
+      },
+      mounted() {
+          this.speakAndAppend("欢迎使用亚健康中医在线问诊系统！请点击右侧的语音按钮或按回车键开始问诊。")
+      }
+    });
+  </script>
+  </body>
+</html>

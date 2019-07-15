@@ -1,0 +1,6 @@
+node_modules
+.idea
+.vscode
+.git
+greeting-darwin-x64
+greeting-win32-x64
