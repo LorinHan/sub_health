@@ -1,7 +1,7 @@
 *{margin: 0;padding: 0;font-family: "楷体", STKaiti, STSong, STXihei, "华文细黑", "Microsoft YaHei", "微软雅黑";}
 body{
     position: relative;
-    background-image: url('imgs/bg.jfif');
+    /* background-image: url('imgs/bg.jfif'); */
     background-size: 100% 100%;
     display: none;
 }

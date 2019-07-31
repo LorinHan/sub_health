@@ -14,18 +14,18 @@
   <body onload="load()">
     <div id="app">
             <el-container style="height: 1200px;">
-                <el-header height="60px" style="text-align: left;" class="header">
+                <!-- <el-header height="60px" style="text-align: left;" class="header">
                     <img src="static/imgs/logo.jpg" alt="">
                     <h1>亚健康状态中医在线问诊</h1>
-                </el-header>
+                </el-header> -->
 
-                <el-carousel :interval="4000" type="card" height="280px">
+                <!-- <el-carousel :interval="4000" type="card" height="280px">
                     <el-carousel-item v-for="item in lb_img" :key="item">
                         <img :src=" 'static/imgs/' + item " alt="">
                     </el-carousel-item>
-                </el-carousel>
+                </el-carousel> -->
                 
-                <el-divider></el-divider>
+                <!-- <el-divider></el-divider> -->
 
                 <el-container class="main">
                         <p v-for="item in text" v-loading="loading" v-cloak>{{item}}</p>
@@ -40,17 +40,17 @@
                         <img class="mik" :src="mik_img_url" alt="">
                 </div>
 
-                <div class="state">
+                <!-- <div class="state">
                     <el-tabs v-model="activeName" @tab-click="handleClick">
                         <el-tab-pane v-for="item in state" :label="item[1]" :name="item[0]">{{item[2]}}</el-tab-pane>
                     </el-tabs>
-                </div>
+                </div> -->
 
-                <el-footer height="25px">
+                <!-- <el-footer height="25px">
                     <span>帮助</span>
                     <span>使用反馈</span>
                     <span>联系我们</span>
-                </el-footer>
+                </el-footer> -->
             </el-container>
     
     </div>
@@ -106,7 +106,11 @@
                 eighth: ["eighth", "风寒", "风寒"],
                 nighth: ["nighth", "肝火", "肝火"],
                 tenth: ["tenth", "虚热", "虚热"],
-            }
+            },
+            ask_model: 0,  // 问答模式
+            index: 0,
+            questions: [],
+            len: 0
         }
       },
       methods: {
@@ -140,7 +144,33 @@
                 // 发送百度AI语音识别请求：
                 client.recognize(file, 'wav', 16000, {dev_pid: '1536'}).then(result => {
                     if(result.err_no == 0) {
-                        this.getByHttp(result.result[0])
+                        // 非问答模式
+                        if(this.ask_model == 0) {
+                            this.getByHttp(result.result[0])
+                        } else if(this.ask_model == 1) {  // 问答模式
+                            if(!result.result[0].includes("是")) {this.speakAndAppend("请回答是的或者不是。");return loader.close();}
+                            // 默认回答是的
+                            this.questions[this.index].answer = 1;
+                            // 如果用户回答有不字代表不是
+                            if(result.result[0].includes("不")) this.questions[this.index].answer = 0;
+                            this.index ++;
+                            // 判断当前索引是否超出问题集的长度
+                            if(this.index < this.len) this.speakAndAppend(this.questions[this.index].question);
+                            // 超出后关闭问答模式，并将问题结果提交后端，接收症状的治疗建议
+                            if(this.index >= this.len) {
+                                this.ask_model = 0;
+                                this.questions.forEach(item => {
+                                    item.question = ""
+                                });
+                                request.post({url:'http://zehuo.huoran.net/advice',
+                                form:{questions: JSON.stringify(this.questions)}}, (error, response, data) => {
+                                    if (!error && response.statusCode == 200) {
+                                        this.speakAndAppend(data);
+                                    }
+                                })
+                                }
+                            loader.close();
+                        }
                     } else {
                         this.speakAndAppend("对不起，没有听清楚，请您再说一次")
                     }
@@ -170,14 +200,23 @@
             getByHttp(text) {
                 // 对中文进行url转码，否则request无法成功发起请求
                 text = encodeURI(text)
-                request("http://127.0.0.1:5000/query?input=" + text, (error, response, data) => {
+                request("http://zehuo.huoran.net/search?talk=" + text, (error, response, data) => {
                     if(error) {
                         console.log(error)
                     } else {
-                        data = JSON.parse(data)
-                        console.log("anwser" + data.answer);
-                        console.log("note" + data.note);
-                        this.speakAndAppend(data.answer + ',' + data.note)
+                        if(data == "err") {
+                            return this.speakAndAppend("无法匹配到对应症状")
+                        } else if(data == "err_more") {
+                            return this.speakAndAppend("请您多说几个字")
+                        }
+                        // 开启问答模式
+                        this.ask_model = 1;
+                        data = JSON.parse(data);
+                        this.questions = data;
+                        this.len = data.length;
+                        this.index = 0;
+                        this.speakAndAppend("根据您的描述，请您回答以下问题，请回答是的或者不是：")
+                        this.speakAndAppend(data[this.index].question)
                     }
                 });
             },
